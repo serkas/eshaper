@@ -5,78 +5,85 @@ package eshaper
 // so workers can not consume more payload messages than there are generated tokens
 
 import (
-	"sync"
+	"math"
 	"time"
 )
 
+type tickSettings struct {
+	tickInterval  time.Duration
+	tokensPerTick int64
+}
+
 type Shaper interface {
-	Run()
-	SetRate(rate int64)
-	Use()
+	SetRate(rate int64, interval time.Duration)
+	Pass()
 }
 
 type shaper struct {
-	tokenCh      chan bool
-	rate         int64
-	mx           sync.RWMutex
-	rateUpdateCh chan int64
+	tokenCh       chan struct{}
+	tickInterval  time.Duration
+	tokensPerTick int64
+	rateCh        chan tickSettings
 }
 
-func NewShaper(rate int64, rateSubscription <-chan int64) *shaper {
+func New(rate int64, baseInterval time.Duration) *shaper {
+	count, interval := selectInterval(rate, baseInterval)
 	sh := &shaper{
-		tokenCh:      make(chan bool, rate),
-		rate:         rate,
-		rateUpdateCh: make(chan int64),
-		mx:           sync.RWMutex{},
+		tokenCh:       make(chan struct{}, 1),
+		tickInterval:  interval,
+		tokensPerTick: count,
+		rateCh:        make(chan tickSettings),
 	}
 
-	// dynamically update the rate
-	go func() {
-		for {
-			rateVal := <-rateSubscription
-			sh.SetRate(rateVal)
-		}
-	}()
+	go sh.run()
 
 	return sh
 }
 
-func (s *shaper) Run() {
-	ticker := time.Tick(time.Second)
-	for {
-
-		select {
-		case <-ticker:
-			added := 0
-			for i := int64(0); i < s.rate; i++ {
-				select {
-				case s.tokenCh <- true:
-					added++
-				default:
-				}
-			}
-
-		case newRate := <-s.rateUpdateCh:
-			oldTokenChannel := s.tokenCh
-			s.rate = newRate
-			s.mx.Lock()
-			s.tokenCh = make(chan bool, newRate)
-			s.mx.Unlock()
-
-			close(oldTokenChannel)
-		}
-
+func (s *shaper) SetRate(rate int64, baseInterval time.Duration) {
+	count, tInt := selectInterval(rate, baseInterval)
+	s.rateCh <- tickSettings{
+		tokensPerTick: count,
+		tickInterval:  tInt,
 	}
 }
 
-func (s *shaper) Use() {
-	s.mx.RLock() // protecting reference read
-	ch := s.tokenCh
-	s.mx.RUnlock()
+func (s *shaper) run() {
+	ticker := time.NewTicker(s.tickInterval)
+	for {
+		select {
+		case settings := <-s.rateCh:
+			s.tickInterval = settings.tickInterval
+			s.tokensPerTick = settings.tokensPerTick
+			ticker.Stop()
+			ticker = time.NewTicker(s.tickInterval)
 
-	<-ch
+		case <-ticker.C:
+			for i := int64(0); i < s.tokensPerTick; i++ {
+				s.tokenCh <- struct{}{}
+			}
+		}
+	}
 }
 
-func (s *shaper) SetRate(rate int64) {
-	s.rateUpdateCh <- rate
+func (s *shaper) Pass() {
+	<-s.tokenCh
+}
+
+func selectInterval(rate int64, interval time.Duration) (int64, time.Duration) {
+	rps := float64(rate) / interval.Seconds()
+
+	// On high rates, add more then one token per tick
+	if rps > 2000 {
+		tick := 10 * time.Millisecond
+		count := int64(math.Ceil(rps * time.Second.Seconds() / tick.Seconds()))
+		return count, tick
+	}
+
+	// If the rate is not so high and the provided interval is exact (one per `interval`) use the interval
+	if rate == 1 {
+		return rate, interval
+	}
+
+	return 1, interval / time.Duration(rate)
 }
