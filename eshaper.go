@@ -1,8 +1,6 @@
-package eshaper
+// Shaper can enforce limit on maximum number of code executions per instance of time.
 
-// shaper generates some token messages in a special channel
-// workers (consumers of the real queue) need to take a token from the shaper channel to consume one message
-// so workers can not consume more payload messages than there are generated tokens
+package eshaper
 
 import (
 	"math"
@@ -11,41 +9,51 @@ import (
 
 type tickSettings struct {
 	tickInterval  time.Duration
-	tokensPerTick int64
+	tokensPerTick int
 }
 
 type Shaper interface {
-	SetRate(rate int64, interval time.Duration)
+	SetMaxRate(rate int, interval time.Duration)
 	Pass()
 }
 
 type shaper struct {
 	tokenCh       chan struct{}
 	tickInterval  time.Duration
-	tokensPerTick int64
+	tokensPerTick int
 	rateCh        chan tickSettings
 }
 
-func New(rate int64, baseInterval time.Duration) *shaper {
-	count, interval := selectInterval(rate, baseInterval)
-	sh := &shaper{
+// Creates a new instance of shaper.
+// Parameters define the  maximum `number` of events per time `interval`.
+func New(number int, interval time.Duration) *shaper {
+	count, tickInterval := selectInterval(number, interval)
+	s := &shaper{
 		tokenCh:       make(chan struct{}, 1),
-		tickInterval:  interval,
+		tickInterval:  tickInterval,
 		tokensPerTick: count,
 		rateCh:        make(chan tickSettings),
 	}
 
-	go sh.run()
+	go s.run()
 
-	return sh
+	return s
 }
 
-func (s *shaper) SetRate(rate int64, baseInterval time.Duration) {
-	count, tInt := selectInterval(rate, baseInterval)
+// SetRate defines the maximum possible rate of calling Pass() without blocking.
+// Parameters define the  maximum `number` of events per time `interval`.
+func (s *shaper) SetMaxRate(number int, interval time.Duration) {
+	count, tInt := selectInterval(number, interval)
 	s.rateCh <- tickSettings{
 		tokensPerTick: count,
 		tickInterval:  tInt,
 	}
+}
+
+// Pass limits the rate of an execution loop where it is inserted.
+// If the set rate is not reached, it returns immediately. Otherwise, it blocks for some time to adjust the rates.
+func (s *shaper) Pass() {
+	<-s.tokenCh
 }
 
 func (s *shaper) run() {
@@ -59,24 +67,20 @@ func (s *shaper) run() {
 			ticker = time.NewTicker(s.tickInterval)
 
 		case <-ticker.C:
-			for i := int64(0); i < s.tokensPerTick; i++ {
+			for i := 0; i < s.tokensPerTick; i++ {
 				s.tokenCh <- struct{}{}
 			}
 		}
 	}
 }
 
-func (s *shaper) Pass() {
-	<-s.tokenCh
-}
-
-func selectInterval(rate int64, interval time.Duration) (int64, time.Duration) {
+func selectInterval(rate int, interval time.Duration) (int, time.Duration) {
 	rps := float64(rate) / interval.Seconds()
 
 	// On high rates, add more then one token per tick
 	if rps > 2000 {
 		tick := 10 * time.Millisecond
-		count := int64(math.Ceil(rps * time.Second.Seconds() / tick.Seconds()))
+		count := int(math.Ceil(rps * time.Second.Seconds() / tick.Seconds()))
 		return count, tick
 	}
 

@@ -9,12 +9,12 @@ import (
 )
 
 func TestShaper(t *testing.T) {
-	var rps int64 = 150
+	var rps = 150
 	s := New(rps, time.Second)
 
-	var count int64 = 100
+	var count = 100
 	start := time.Now()
-	for i := 0; i < int(count); i++ {
+	for i := 0; i < count; i++ {
 		s.Pass()
 	}
 
@@ -26,12 +26,12 @@ func TestShaper(t *testing.T) {
 }
 
 func TestShaper_RateChange(t *testing.T) {
-	var rps int64 = 100
+	var rps = 100
 	s := New(rps, time.Second)
 
-	var count int64 = 50
+	var count = 50
 	start := time.Now()
-	for i := 0; i < int(count); i++ {
+	for i := 0; i < count; i++ {
 		s.Pass()
 	}
 
@@ -41,8 +41,8 @@ func TestShaper_RateChange(t *testing.T) {
 	var tolerance = 0.05
 	assert.LessOrEqual(t, math.Abs(relativeDiff), tolerance)
 
-	var rps2 int64 = 500
-	s.SetRate(rps2, time.Second)
+	var rps2 = 500
+	s.SetMaxRate(rps2, time.Second)
 
 	start = time.Now()
 	for i := 0; i < int(count); i++ {
