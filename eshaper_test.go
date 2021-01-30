@@ -19,7 +19,7 @@ func TestShaper(t *testing.T) {
 	}
 
 	elapsed := time.Since(start)
-	expected := time.Duration(count) * time.Second/time.Duration(rps)
+	expected := time.Duration(count) * time.Second / time.Duration(rps)
 	relativeDiff := (elapsed.Seconds() - expected.Seconds()) / expected.Seconds()
 	var tolerance = 0.05
 	assert.LessOrEqual(t, math.Abs(relativeDiff), tolerance)
@@ -36,7 +36,7 @@ func TestShaper_RateChange(t *testing.T) {
 	}
 
 	elapsed := time.Since(start)
-	expected := time.Duration(count) * time.Second/time.Duration(rps)
+	expected := time.Duration(count) * time.Second / time.Duration(rps)
 	relativeDiff := (elapsed.Seconds() - expected.Seconds()) / expected.Seconds()
 	var tolerance = 0.05
 	assert.LessOrEqual(t, math.Abs(relativeDiff), tolerance)
@@ -49,7 +49,7 @@ func TestShaper_RateChange(t *testing.T) {
 		s.Pass()
 	}
 	elapsed = time.Since(start)
-	expected = time.Duration(count) * time.Second/time.Duration(rps2)
+	expected = time.Duration(count) * time.Second / time.Duration(rps2)
 	relativeDiff = (elapsed.Seconds() - expected.Seconds()) / expected.Seconds()
 	assert.LessOrEqual(t, math.Abs(relativeDiff), tolerance)
 }

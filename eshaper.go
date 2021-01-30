@@ -27,6 +27,10 @@ type shaper struct {
 // Creates a new instance of shaper.
 // Parameters define the  maximum `number` of events per time `interval`.
 func New(number int, interval time.Duration) *shaper {
+	if number < 1 {
+		number = 1
+	}
+
 	count, tickInterval := selectInterval(number, interval)
 	s := &shaper{
 		tokenCh:       make(chan struct{}, 1),
@@ -43,6 +47,10 @@ func New(number int, interval time.Duration) *shaper {
 // SetRate defines the maximum possible rate of calling Pass() without blocking.
 // Parameters define the  maximum `number` of events per time `interval`.
 func (s *shaper) SetMaxRate(number int, interval time.Duration) {
+	if number < 1 {
+		number = 1
+	}
+
 	count, tInt := selectInterval(number, interval)
 	s.rateCh <- tickSettings{
 		tokensPerTick: count,
@@ -74,8 +82,8 @@ func (s *shaper) run() {
 	}
 }
 
-func selectInterval(rate int, interval time.Duration) (int, time.Duration) {
-	rps := float64(rate) / interval.Seconds()
+func selectInterval(number int, interval time.Duration) (int, time.Duration) {
+	rps := float64(number) / interval.Seconds()
 
 	// On high rates, add more then one token per tick
 	if rps > 2000 {
@@ -85,9 +93,9 @@ func selectInterval(rate int, interval time.Duration) (int, time.Duration) {
 	}
 
 	// If the rate is not so high and the provided interval is exact (one per `interval`) use the interval
-	if rate == 1 {
-		return rate, interval
+	if number > 1 {
+		return 1, interval / time.Duration(number)
 	}
 
-	return 1, interval / time.Duration(rate)
+	return number, interval
 }
