@@ -1,6 +1,6 @@
 // Shaper can enforce limit on maximum number of code executions per instance of time.
 
-package eshaper
+package shaper
 
 import (
 	"math"
@@ -71,8 +71,7 @@ func (s *shaper) run() {
 		case settings := <-s.rateCh:
 			s.tickInterval = settings.tickInterval
 			s.tokensPerTick = settings.tokensPerTick
-			ticker.Stop()
-			ticker = time.NewTicker(s.tickInterval)
+			ticker.Reset(s.tickInterval)
 
 		case <-ticker.C:
 			for i := 0; i < s.tokensPerTick; i++ {

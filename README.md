@@ -11,3 +11,6 @@ It can be usable in cases when:
 
 
 ![Shaping of bursts](./chart.png)
+
+
+Go 1.15 required

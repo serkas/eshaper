@@ -1,4 +1,4 @@
-package eshaper
+package shaper
 
 import (
 	"math"
